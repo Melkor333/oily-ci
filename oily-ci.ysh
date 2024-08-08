@@ -1,0 +1,70 @@
+#!/usr/bin/env ysh
+
+# Weird name, provides 'log' and 'die'
+#source --builtin osh/two.sh
+
+if (len(ARGV) < 1) {
+  echo Need at least one argument to run a file
+  exit 1
+}
+proc info {
+  echo '    ##' @[ARGV]
+}
+
+# TODO: Argparse to run only a single stage
+
+hay define pipeline/task/RUN
+
+var h = parseHay(ARGV[0])
+var pipelines = evalHay(h)
+
+#= pipelines
+
+proc run-task (;task, env_override) {
+  info Run task: $[task.args[0]]
+  var env = []
+  if ("environment" in task.attrs) {
+    for variable, info in (task.attrs.environment) {
+      if (variable in env_override) {
+        setvar env = env ++ :|--env $variable=$[env_override[variable]]|
+      } elif ("default" in info) {
+        setvar env = env ++ :|--env $variable=$[info.default]|
+      } elif ("required" in info) {
+        die
+        # TODO: This should happen before any task runs
+      }
+    }
+  }
+  for run in (task.children) {
+    #info podman run -ti --rm @[env] --mount type=bind,source=./,target=/$(basename $(pwd)) --init-path=/$(basename $(pwd)) $[task.attrs.image] @[task.attrs.shell] $[run.code_str]
+
+    podman run -ti --rm @[env] --mount type=bind,source=./,target=/$(basename $(pwd)) --init-path=/$(basename $(pwd)) $[task.attrs.image] @[task.attrs.shell] $[run.code_str]
+  }
+}
+
+for pipeline in (pipelines.children) {
+  var stages = pipeline.attrs.stages
+  var s = {}
+  # TODO: needs and stuff
+  for stage in (stages) {
+    setvar s[stage] = []
+  }
+
+  if (pipeline.type !== "pipeline") { continue }
+  for task in (pipeline.children) {
+    if (task.type !== "task") { continue }
+    #= task
+    call s[task.attrs.stage]->append(task)
+  }
+
+  for stage in (stages) {
+    info "run stage: $stage"
+    var environment = {}
+    if ("environment" in pipeline.attrs) {
+      setvar environment = pipeline.attrs.environment
+    }
+    for task in (s[stage]) {
+      run-task (task, environment)
+    }
+  }
+}

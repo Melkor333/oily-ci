@@ -1,0 +1,41 @@
+# This is a "gear". It's run by the oily-ci. it defines a CI job
+# Highly experimental
+
+pipeline "test" {
+  var stages = [ "one", "two" ]
+  # TODO: Overwrite an env variable
+  var environment = {
+    WORD: "NO"
+  }
+
+  task "Say Hello" {
+    var stage = "one"
+    # Try some input stuff because all the fancy ppl have it aswell
+    var environment = {
+      WORD: { default: "hello" }
+    }
+    var image = "quay.io/chroot.club/oils:v0.22.0-debian"
+    var shell = :|osh -c|
+  
+    # This is what actually runs in the container.
+    # This has already been parsed by oils to be valid shell!
+    # Inputs are passed as env variables
+    RUN {
+      echo $WORD
+    }
+  }
+
+  task "Say Goodbye" {
+    var stage = "two"
+    var environment = {
+      WORD: { default: "goodbye" }
+    }
+    # Yey!
+    var image = "quay.io/chroot.club/oils:v0.22.0-debian"
+    var shell = :|osh -c|
+  
+    RUN {
+      echo $WORD
+    }
+  }
+}
