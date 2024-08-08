@@ -20,6 +20,12 @@ var pipelines = evalHay(h)
 
 #= pipelines
 
+# Important: The whole part from here on could be written in any language
+# The idea is NOT to have a CI *written in ysh*.
+# The idea is to have a CI *configured in hay*.
+# not yaml + go templates. or yaml + jinja. or yaml + weird custom interpretation
+# In most cases, you have *one* language
+
 proc run-task (;task, env_override) {
   info Run task: $[task.args[0]]
   var env = []

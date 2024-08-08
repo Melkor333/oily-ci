@@ -18,8 +18,8 @@ pipeline "test" {
     var shell = :|osh -c|
   
     # This is what actually runs in the container.
-    # This has already been parsed by oils to be valid shell!
     # Inputs are passed as env variables
+    # This isn't necessary oils. It can be just bash. or python. Anything
     RUN {
       echo $WORD
     }
