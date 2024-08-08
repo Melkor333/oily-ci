@@ -13,10 +13,27 @@ proc info {
 
 # TODO: Argparse to run only a single stage
 
-hay define pipeline/task/RUN
 
-var h = parseHay(ARGV[0])
-var pipelines = evalHay(h)
+case (ARGV[0]) {
+  *hay {
+    hay define pipeline/task/RUN
+    var h = parseHay(ARGV[0])
+    var pipelines = evalHay(h)
+  }
+  # If we have a YSH file, parse that
+  # TODO: Oils sandboxed is still pending. That here should be sandboxed!
+  *ysh {
+    osh -c "
+      source $[ARGV[0]]
+      var pipelines = _hay()
+      json write (pipelines)
+    "
+  }
+  (else) {
+    info "Need a hay or ysh file"
+    exit 1
+  }
+}
 
 #= pipelines
 
