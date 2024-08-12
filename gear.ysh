@@ -31,12 +31,6 @@ proc hello-task (;;name="World", _stage="one", word="hello") {
 pipeline "test" {
   var stages = [ "one", "two" ]
 
-  # This is used in the evaluation process
-  var environment = {
-    WORD: global_var
-  }
-
-  # TODO: implement this
   for hello in (all_hellos) {
     hello-task (name=hello)
   }
