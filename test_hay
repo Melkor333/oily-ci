@@ -1,0 +1,14 @@
+hay define pipeline/task/RUN
+
+# Could also be func?
+proc task_templ (name) {
+  task "Hello $name" {
+    RUN {
+      echo "Hello $name"
+    }
+  }
+}
+
+pipeline "My Pipeline" {
+  task_templ hello
+}

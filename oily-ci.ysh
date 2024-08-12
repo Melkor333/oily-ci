@@ -23,11 +23,11 @@ case (ARGV[0]) {
   # If we have a YSH file, parse that
   # TODO: Oils sandboxed is still pending. That here should be sandboxed!
   *ysh {
-    osh -c "
+    ysh -c "
       source $[ARGV[0]]
       var pipelines = _hay()
       json write (pipelines)
-    "
+    " | json read (&pipelines)
   }
   (else) {
     info "Need a hay or ysh file"
@@ -45,23 +45,27 @@ case (ARGV[0]) {
 
 proc run-task (;task, env_override) {
   info Run task: $[task.args[0]]
-  var env = []
-  if ("environment" in task.attrs) {
-    for variable, info in (task.attrs.environment) {
+  #= task
+  for run in (task.children) {
+    var env = []
+    var run_vars = {}
+    if (len(run.args) > 0) {
+      echo $[run.args[0]] | json8 read (&run_vars)
+    }
+    # Merge env_override
+    # TODO: what if no default is set?
+    for variable, info in (run_vars) {
+      # If a override is specified, use it
       if (variable in env_override) {
         setvar env = env ++ :|--env $variable=$[env_override[variable]]|
-      } elif ("default" in info) {
-        setvar env = env ++ :|--env $variable=$[info.default]|
-      } elif ("required" in info) {
-        die
-        # TODO: This should happen before any task runs
+      # Otherwise use default
+      } else {
+        setvar env = env ++ :|--env $variable=$info|
       }
     }
-  }
-  for run in (task.children) {
-    #info podman run -ti --rm @[env] --mount type=bind,source=./,target=/$(basename $(pwd)) --init-path=/$(basename $(pwd)) $[task.attrs.image] @[task.attrs.shell] $[run.code_str]
+    info podman run -ti --rm @[env] --mount "type=bind,source=./,target=/$(basename $(pwd))" --init-path=/$(basename $(pwd)) $[task.attrs.image] osh -c $[run.code_str => trim()]
 
-    podman run -ti --rm @[env] --mount type=bind,source=./,target=/$(basename $(pwd)) --init-path=/$(basename $(pwd)) $[task.attrs.image] @[task.attrs.shell] $[run.code_str]
+    podman run -ti --rm @[env] --mount "type=bind,source=./,target=/$(basename $(pwd))" --init-path=/$(basename $(pwd)) $[task.attrs.image] osh -c $[run.code_str => trim()]
   }
 }
 
