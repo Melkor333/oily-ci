@@ -1,0 +1,104 @@
+#!/usr/bin/env ysh
+# vim: ft=ysh
+# Manage metadata of tasks
+# store them in `.tm-auto`
+# Can be used to rerun a task, use dependencies of a task, etc.
+
+setglobal STATEFILE = ".tm-auto"
+
+use $LIB_YSH/args.ysh --pick parser parseArgs
+parser (&spec) {
+  flag -l --list (help="list tasks")
+}
+setglobal arg = parseArgs(spec, ARGV)
+= arg
+exit
+
+if (len(ARGV) < 1) {
+  echo Need at least a name
+  exit 1
+}
+var name = ARGV[0]
+
+func new(list, obj) {
+  if (list=>indexOf(obj) === -1) {
+    call list->append(obj)
+  }
+}
+
+# strace-awk
+proc yawk (;;;block) {
+  for line in (io.stdin) {
+    var l = {}
+    var a = line=>split('(')
+    if (len(a) > 1) {
+      var c = a[0].split(' ')
+      setvar l.pid = c[0]
+      setvar l.time = c[1]
+      setvar l.type = c[2]
+      var b = a[1]=>split(')')
+      setvar l.args = b[0]=>split(", ")
+      setvar l.return = b[1]
+      call io->eval(block, vars=l, dollar0=line)
+    }
+  }
+}
+
+touch $STATEFILE
+var state
+try {
+  json read (&state) <$STATEFILE 2>/dev/null
+}
+if (_error.code !== 0) {
+  setvar state = {}
+}
+var originState = dict(state)
+
+var file = "...strace"
+if (len(ARGV) > 1) {
+  var command = ARGV[1:]
+} else {
+  if (name not in originState or 'command' not in originState[name]) {
+    echo no command found for $name
+    exit 1
+  }
+  var command = originState[name].command
+}
+strace --seccomp-bpf -o $file -ttTfze connect,open,openat @command
+
+var read = []
+var write = []
+exec <$file
+yawk {
+  var p = $(realpath $[args[1]=>trim('"')])
+  if (args[2] ~~ "*RDONLY*") {
+    call read=>new(p)
+  } else {
+    call write=>new(p)
+  }
+}
+
+rm $file
+
+setvar state[name] = {read, write, command}
+for n, t in (state) {
+  for file in (t.write) {
+    for other, tt in (state) {
+    if (other === n) { continue }
+      if (tt.read=>indexOf(file) >= 0) {
+        if ('dependencies' not in tt) {
+	  setvar tt.dependencies = {}
+	}
+	if (file not in tt.dependencies) {
+	  setvar tt.dependencies[file] = [n]
+	} else {
+	  call tt.dependencies[file]=>new([n, file])
+	}
+      }
+    }
+  }
+}
+try {
+  diff <(json write (originState)) <(json write (state))
+}
+json write (state) > $STATEFILE

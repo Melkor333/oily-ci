@@ -1,0 +1,107 @@
+#!/usr/bin/env ysh
+
+# Weird name, provides 'log' and 'die'
+#source --builtin osh/two.sh
+
+if (len(ARGV) < 1) {
+  echo Need at least one argument to run a file
+  exit 1
+}
+proc info {
+  echo '    ##' @[ARGV]
+}
+
+# TODO: Argparse to run only a single stage
+
+proc script (;;...args;block) {
+  ctx emit script ([block, args]) 
+}
+proc inherit (arg) {
+  echo "inherit!"
+}
+
+# TODO: Not on top level. part of pipeline
+proc task (name;;;block) {
+  var evals = {}
+  # fake evalInFrame
+  ctx push (evals) {
+    var taskinfo = io->evalToDict(block)
+  }
+  # TODO: merge dicts
+  setvar taskinfo.script = evals.script[0]
+  ctx emit $name (taskinfo)
+}
+
+proc pipeline (name;;;block) {
+  var tasks = {}
+  ctx push (tasks) {
+    var pipeline = io->evalToDict(block)
+  }
+  setvar pipeline.tasks = tasks
+  # AFAIU this goes back 2 stacks, therefore need emit even if it becomes an array
+  ctx emit $name (pipeline)
+}
+
+case (ARGV[0]) {
+  # If we have a YSH file, parse that
+  # TODO: Oils sandboxed is still pending. That here should be sandboxed!
+  *ysh {
+    var code = $(cat $[ARGV[0]])
+    var block = parseCommand(code)
+    var pipelines = {}
+    ctx push (pipelines) {
+      call io->eval(block)
+    }
+  }
+  (else) {
+    info "Need a hay or ysh file"
+    exit 1
+  }
+}
+
+= pipelines
+exit
+
+# Important: The whole part from here on could be written in any language
+# The idea is NOT to have a CI *written in ysh*.
+# The idea is to have a CI *configured in hay*.
+# not yaml + go templates. or yaml + jinja. or yaml + weird custom interpretation
+# In most cases, you have *one* language
+
+proc run-task (name;task, env_override) {
+  info Run task: $name
+  # TODO: temporary fix for only one allowed script
+  for script in ([task.script]) {
+    var env = []
+    for variable, info in (script[1]) {
+      # If a override is specified, use it
+      if (variable in env_override) {
+        setvar env = env ++ :|--env $variable=$[env_override[variable]]|
+      # Otherwise use default
+      } else {
+        setvar env = env ++ :|--env $variable=$info|
+      }
+    }
+    info podman run -ti --rm @[env] --mount "type=bind,source=./,target=/$(basename $(pwd))" --init-path=/$(basename $(pwd)) $[task.image] @[task=>get('shell', :|osh -c|)] $[script[0]]
+
+    podman run -ti --rm @[env] --mount "type=bind,source=./,target=/$(basename $(pwd))" --init-path=/$(basename $(pwd)) $[task.image] @[task=>get('shell', :|osh -c|)] $[script[0]]
+  }
+}
+
+for name, p in (pipelines) {
+ setvar pipeline = p[0]
+ echo "pipeline $name"
+  for stage in (pipeline.stages) {
+    for name, t in (pipeline.tasks) {
+      setvar task = t[0]
+      if (task.stage !== stage) { continue }
+      
+      info "run stage: $stage"
+      var environment = {}
+      if ("environment" in pipeline) {
+        setvar environment = pipeline.environment
+      }
+      run-task $name (task, environment)
+    }
+  }
+}

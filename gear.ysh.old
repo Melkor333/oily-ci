@@ -1,9 +1,12 @@
 # This is a "gear". It's run by the oily-ci. it defines a CI job
 # Highly experimental
+# ysh 0.24.0
 
 pipeline "test" {
   var stages = [ "one", "two" ]
   # TODO: Overwrite an env variable
+  #
+  var environment = { word: "overridden!" }
 
   task "Say Hello" {
     var stage = "one"
@@ -14,7 +17,7 @@ pipeline "test" {
     # Inputs are passed as env variables
     # This isn't necessary oils. It can be just bash. or python. Anything
     # TODO: this should be RUN (word='hello')
-    RUN "{ 'word': 'hello' }" {
+    script ( word='hello' ) {
       echo $word
     }
   }
@@ -25,8 +28,6 @@ pipeline "test" {
     var image = "quay.io/chroot.club/oils:v0.22.0-debian"
     var shell = :|osh -c|
     # TODO: inheritance? or what?
-    RUN {
-      echo goodbye
-    }
+    script { $[pipelines.test["Say Hello"].script] 'goodbye' }
   }
 }

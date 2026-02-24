@@ -1,39 +1,19 @@
-#!/usr/bin/env ysh
-
 # This is a "gear". It's run by the oily-ci. it defines a CI job
 # Highly experimental
-# TODO: This still doesn't work :)
+# ysh 0.24.0
 
-hay define pipeline/task/RUN
-var global_var = "Global NO"
+task "Say Hello" {
+  var image = "quay.io/chroot.club/oils:v0.22.0-debian"
+  var shell = :|osh -c|
 
-var all_hellos = [ "You", "lovely", "people", "Chuck Norris" ]
-
-proc hello-task (;;name="World", _stage="one", word="hello") {
-  # TODO: this should have (name=name, _stage=_stage, word=word)
-  task "Say hello" {
-    # TODO: should be = _stage
-    var stage = 'one'
-    # Try some input stuff because all the fancy ppl have it aswell
-    var image = "quay.io/chroot.club/oils:v0.22.0-debian"
-  
-    # TODO: this probably also doesn't work
-    # But it's nice, because this means the arguments are passed to the evaluation engine transparently
-    # It's not "echo World" but "args: { word: 'World' }, cmd: 'echo $word'". This means $word can be overwritten by CI logic!
-    # This is exactly what makes it great, but is *hard* to grasp!
-    # TODO: this should be (word: $word)?
-    RUN "{'word': 'word'}" {
-      echo $word
-    }
+  script {
+    echo Hello World > myfile
   }
 }
 
-pipeline "test" {
-  var stages = [ "one", "two" ]
-
-  for hello in (all_hellos) {
-    hello-task (name=hello)
-  }
-
-  hello-task (word="goodbye")
+task "Say Goodbye" {
+  var image = "quay.io/chroot.club/oils:v0.22.0-debian"
+  var shell = :|osh -c|
+  # TODO: inheritance? or what?
+  script { cat myfile }
 }
